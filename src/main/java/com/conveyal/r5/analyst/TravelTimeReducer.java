@@ -352,8 +352,10 @@ public class TravelTimeReducer {
     public void checkOpportunityExtents (PointSet travelTimePointSet) {
         if (calculateAccessibility) {
             for (PointSet opportunityPointSet : destinationPointSets) {
+            	if (!(opportunityPointSet instanceof FreeFormPointSet)) {
                 checkState(opportunityPointSet.getWebMercatorExtents().equals(travelTimePointSet.getWebMercatorExtents()),
                         "Travel time would be calculated to a PointSet that does not match the opportunity PointSet.");
+            	}
             }
         }
     }

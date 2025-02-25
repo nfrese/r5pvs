@@ -1,5 +1,13 @@
 package com.conveyal.r5.point_to_point;
 
+import com.conveyal.r5.OneOriginResult;
+import com.conveyal.r5.analyst.TravelTimeComputer;
+import com.conveyal.r5.analyst.cluster.AnalysisWorker;
+import com.conveyal.r5.analyst.cluster.TimeGridWriter;
+import com.conveyal.r5.analyst.cluster.TravelTimeSurfaceTask;
+import com.conveyal.r5.analyst.cluster.WorkerNotReadyException;
+import com.conveyal.r5.analyst.error.ScenarioApplicationException;
+import com.conveyal.r5.analyst.error.TaskError;
 import com.conveyal.r5.analyst.fare.ParetoServer;
 import com.conveyal.r5.api.GraphQlRequest;
 import com.conveyal.r5.api.util.BikeRentalStation;
@@ -24,8 +32,14 @@ import com.conveyal.r5.streets.VertexStore;
 import com.conveyal.r5.transit.TransportNetwork;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
+import com.google.common.io.LittleEndianDataOutputStream;
+
 import gnu.trove.map.TIntIntMap;
 import gnu.trove.set.TIntSet;
+import spark.Request;
+import spark.Response;
+
+import org.eclipse.jetty.http.HttpStatus;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.LineString;
@@ -35,7 +49,9 @@ import org.locationtech.jts.operation.buffer.OffsetCurveBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -47,6 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static com.conveyal.r5.analyst.cluster.TravelTimeSurfaceTask.Format.GEOTIFF;
 import static com.conveyal.r5.streets.VertexStore.fixedDegreesToFloating;
 import static com.conveyal.r5.streets.VertexStore.floatingDegreesToFixed;
 import static spark.Spark.before;
@@ -930,8 +947,62 @@ public class PointToPointRouterServer {
         }, JsonUtilities.objectMapper::writeValueAsString);
 
         post("/pareto", paretoServer::handle);
+        
+        post("/single", (request, response) -> {
+        	return handleSinglePoint(request, response, transportNetwork);
+        }
+        );
     }
 
+    public static Object handleSinglePoint (Request request, Response response, TransportNetwork transportNetwork) throws IOException {
+        // This header will cause the Spark Framework to gzip the data automatically if requested by the client.
+        // FIXME I'm not seeing this on the wire, is the client asking for gzipped responses?
+        response.header("Content-Encoding", "gzip");
+        TravelTimeSurfaceTask task = JsonUtilities.objectFromRequestBody(request, TravelTimeSurfaceTask.class);
+        // TODO do not return raw binary data from method, return better typed response.
+        // TODO possibly move data preloading to this point, to allow returning different HTTP status codes.
+        if (task.logRequest){
+            LOG.info(request.body());
+        }
+        try {
+            //byte[] binaryResult = analysisWorker.handleAndSerializeOneSinglePointTask(task);
+            
+            TravelTimeComputer computer = new TravelTimeComputer(task, transportNetwork);
+            OneOriginResult oneOriginResult = computer.computeTravelTimes();
+            
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+            // The single-origin travel time surface can be represented as a proprietary grid or as a GeoTIFF.
+            TimeGridWriter timeGridWriter = new TimeGridWriter(oneOriginResult.travelTimes, task);
+            if (task.getFormat() == GEOTIFF) {
+                timeGridWriter.writeGeotiff(byteArrayOutputStream);
+            } else {
+                // Catch-all, if the client didn't specifically ask for a GeoTIFF give it a proprietary grid.
+                // Return raw byte array representing grid to caller, for return to client over HTTP.
+                // TODO eventually reuse same code path as static site time grid saving
+                // TODO move the JSON writing code into the grid writer, it's essentially part of the grid format
+                timeGridWriter.writeToDataOutput(new LittleEndianDataOutputStream(byteArrayOutputStream));
+                AnalysisWorker.addJsonToGrid(
+                        byteArrayOutputStream,
+                        oneOriginResult,
+                        transportNetwork.scenarioApplicationWarnings,
+                        transportNetwork.scenarioApplicationInfo,
+                        transportNetwork.transitLayer
+                );
+            }
+            
+            response.status(HttpStatus.OK_200);
+            if (task.getFormat().equals(GEOTIFF)) {
+                response.header("Content-Type", "application/x-geotiff");
+            } else {
+                response.header("Content-Type", "application/octet-stream");
+            }
+            return byteArrayOutputStream.toByteArray();
+        } catch (Throwable throwable) {
+        	throw new RuntimeException(throwable);
+        }
+    }
+    
     /**
      * Add a feature to the supplied List of GeoJSON features. Used in street layer debug visualizations.
      */

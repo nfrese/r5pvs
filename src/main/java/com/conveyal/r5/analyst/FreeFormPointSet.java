@@ -237,7 +237,7 @@ public class FreeFormPointSet extends PointSet {
 
     @Override
     public Envelope getWgsEnvelope () {
-        if (lats.length == 1 || lons.length == 0) {
+        if (lats.length == 0 || lons.length == 0) {
             LOG.error("Attempt to create envelope from empty lat/lon array.");
             return null;
         }
