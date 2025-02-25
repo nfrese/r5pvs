@@ -267,6 +267,12 @@ public class EgressCostTable implements Serializable {
                 // table out from the street vertices to the points in this PointSet. It may be possible to reuse the
                 // code that pre-computes walk tables at TransitLayer.buildOneDistanceTable() rather than duplicating
                 // it below for other (non-walk) modes.
+            	
+            	if (transitLayer.stopToVertexDistanceTables ==  null)
+            	{
+            		throw new RuntimeException("transitLayer.stopToVertexDistanceTables =  null");
+            	}
+            	
                 TIntIntMap distanceTableToVertices = transitLayer.stopToVertexDistanceTables.get(stopIndex);
                 return distanceTableToVertices == null ? null :
                         linkedPointSet.extendDistanceTableToPoints(distanceTableToVertices, envelopeAroundStop);

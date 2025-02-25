@@ -12,7 +12,7 @@ version gitVersion()
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(23))
     }
     withSourcesJar()
 }
@@ -41,6 +41,7 @@ shadowJar {
 // IntelliJ seems not to pass these JVM arguments when running tests from within the IDE, so the Kryo serialization
 // tests may only succeed under command line Gradle.
 test {
+	//ext['junit-jupiter.version'] = '5.11.3'
     useJUnitPlatform()
     jvmArgs = ['--add-opens=java.base/java.io=ALL-UNNAMED',
                '--add-opens=java.base/java.time=ALL-UNNAMED',
@@ -264,8 +265,9 @@ dependencies {
     ////// Test-only dependencies //////
 
     // Java unit testing framework.
-    testImplementation('org.junit.jupiter:junit-jupiter:5.9.2')
+    //testImplementation('org.junit.jupiter:junit-jupiter:5.9.2')
 
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     // Chart drawing library for examining travel time distributions when crafting tests.
     // Although rarely used it should be low-impact: it is a test-only dependency with no transitive dependenices.
     testImplementation('org.jfree:jfreechart:1.5.1')
