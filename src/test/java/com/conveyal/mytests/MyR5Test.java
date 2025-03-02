@@ -190,7 +190,7 @@ public class MyR5Test {
 
 			@Override
 			public WebMercatorExtents getWebMercatorExtents() {
-				return WebMercatorExtents.forBufferedWgsEnvelope(transportNetwork.getEnvelope(), 10 );
+				return WebMercatorExtents.forBufferedWgsEnvelope(transportNetwork.streetLayer.getEnvelope(), 10 );
 			}
 
 //			@Override

@@ -1,8 +1,13 @@
 package com.conveyal.r5.point_to_point;
 
+import com.conveyal.analysis.models.CsvResultOptions;
 import com.conveyal.r5.OneOriginResult;
+import com.conveyal.r5.analyst.FreeFormPointSet;
+import com.conveyal.r5.analyst.PointSet;
 import com.conveyal.r5.analyst.TravelTimeComputer;
+import com.conveyal.r5.analyst.WebMercatorExtents;
 import com.conveyal.r5.analyst.cluster.AnalysisWorker;
+import com.conveyal.r5.analyst.cluster.RegionalTask;
 import com.conveyal.r5.analyst.cluster.TimeGridWriter;
 import com.conveyal.r5.analyst.cluster.TravelTimeSurfaceTask;
 import com.conveyal.r5.analyst.cluster.WorkerNotReadyException;
@@ -14,6 +19,7 @@ import com.conveyal.r5.api.util.BikeRentalStation;
 import com.conveyal.r5.api.util.LegMode;
 import com.conveyal.r5.api.util.ParkRideParking;
 import com.conveyal.r5.api.util.Stop;
+import com.conveyal.r5.api.util.TransitModes;
 import com.conveyal.r5.common.GeoJsonFeature;
 import com.conveyal.r5.common.GeometryUtils;
 import com.conveyal.r5.common.JsonUtilities;
@@ -29,7 +35,10 @@ import com.conveyal.r5.streets.Split;
 import com.conveyal.r5.streets.StreetRouter;
 import com.conveyal.r5.streets.TurnRestriction;
 import com.conveyal.r5.streets.VertexStore;
+import com.conveyal.r5.transit.RouteInfo;
+import com.conveyal.r5.transit.TransitLayer.EntityRepresentation;
 import com.conveyal.r5.transit.TransportNetwork;
+import com.conveyal.r5.transit.path.RouteSequence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.google.common.io.LittleEndianDataOutputStream;
@@ -52,6 +61,7 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -59,9 +69,12 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import static com.conveyal.r5.analyst.cluster.TravelTimeSurfaceTask.Format.GEOTIFF;
 import static com.conveyal.r5.streets.VertexStore.fixedDegreesToFloating;
@@ -82,7 +95,7 @@ import static spark.Spark.staticFileLocation;
 public class PointToPointRouterServer {
     private static final Logger LOG = LoggerFactory.getLogger(PointToPointRouterServer.class);
 
-    private static final int DEFAULT_PORT = 8080;
+    private static final int DEFAULT_PORT = 5325;
 
     private static final String DEFAULT_BIND_ADDRESS = "0.0.0.0";
 
@@ -126,6 +139,7 @@ public class PointToPointRouterServer {
                 LOG.info("Loading transit networks from: {}", dir);
                 TransportNetwork transportNetwork = KryoNetworkSerializer.read(new File(dir, "network.dat"));
                 transportNetwork.readOSM(new File(dir, "osm.mapdb"));
+                transportNetwork.transitLayer.buildDistanceTables(null);
                 run(transportNetwork);
             } catch (Exception e) {
                 LOG.error("An error occurred during the reading or decoding of transit networks", e);
@@ -948,17 +962,80 @@ public class PointToPointRouterServer {
 
         post("/pareto", paretoServer::handle);
         
-        post("/single", (request, response) -> {
+        get("/single", (request, response) -> {
         	return handleSinglePoint(request, response, transportNetwork);
         }
         );
     }
 
+    public static class RouteInfos {
+    	public int routeId;
+    	public String routeName;
+    	public String routeLongName;
+		public int routeType;
+    }
+    
+    public static class RouteStats {
+    	public int routeId;
+    	public int count=0;
+    	public double minDuration=Double.MAX_VALUE;
+    }
+    
     public static Object handleSinglePoint (Request request, Response response, TransportNetwork transportNetwork) throws IOException {
-        // This header will cause the Spark Framework to gzip the data automatically if requested by the client.
+        
+    	String sources = request.queryParams("sources");
+    	String destinations = request.queryParams("destinations");
+    	
+    	var sourceCoordinates = paramToCoordinates(sources);
+    	var destCoordinates = paramToCoordinates(destinations);
+    	
+    	if (sourceCoordinates.size() != 1)
+    	{
+    		throw new RuntimeException("1 pair of source coordinates expected, got "+ sources);
+    	}
+    	
+        RegionalTask task = new RegionalTask() {
+
+// 			@Override
+// 			public Type getType() {
+// 				return Type.TRAVEL_TIME_SURFACE;
+// 			}
+
+ 			@Override
+ 			public WebMercatorExtents getWebMercatorExtents() {
+ 				return WebMercatorExtents.forBufferedWgsEnvelope(transportNetwork.streetLayer.getEnvelope(), 10 );
+ 			}
+
+// 			@Override
+// 			public int nTargetsPerOrigin() {
+// 				return 10;
+// 			}
+ 		};
+ 			
+ 		task.zoom = 10;
+ 		task.fromLat = sourceCoordinates.get(0).y; 
+ 		task.fromLon = sourceCoordinates.get(0).x;
+ 		task.date = LocalDate.of(2025,2,5);
+ 		task.fromTime = 7 * 60 * 60;
+ 		task.maxTripDurationMinutes = 30;
+ 		//task.monteCarloDraws = 10;
+ 		task.toTime = 9 * 60 * 60;
+ 		task.transitModes = EnumSet.of(TransitModes.BUS);
+ 		task.accessModes = EnumSet.of(LegMode.WALK);
+ 		task.directModes = EnumSet.of(LegMode.WALK);
+ 		task.oneToOne=false;
+ 		task.egressModes = EnumSet.of(LegMode.WALK);
+ 		task.includePathResults = true;
+ 		task.percentiles = new int[] {1,25,50,75,99};
+ 		task.cutoffsMinutes = new int[] {5,10,15,20,25};
+ 		task.destinationPointSets = new PointSet[] { new FreeFormPointSet(destCoordinates.toArray(new Coordinate[0])) };
+ 		task.csvResultOptions = new CsvResultOptions();
+ 		task.dualAccessibilityThreshold = 10;
+    	
+    	// This header will cause the Spark Framework to gzip the data automatically if requested by the client.
         // FIXME I'm not seeing this on the wire, is the client asking for gzipped responses?
         response.header("Content-Encoding", "gzip");
-        TravelTimeSurfaceTask task = JsonUtilities.objectFromRequestBody(request, TravelTimeSurfaceTask.class);
+        //TravelTimeSurfaceTask task = JsonUtilities.objectFromRequestBody(request, TravelTimeSurfaceTask.class);
         // TODO do not return raw binary data from method, return better typed response.
         // TODO possibly move data preloading to this point, to allow returning different HTTP status codes.
         if (task.logRequest){
@@ -972,36 +1049,134 @@ public class PointToPointRouterServer {
             
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 
-            // The single-origin travel time surface can be represented as a proprietary grid or as a GeoTIFF.
-            TimeGridWriter timeGridWriter = new TimeGridWriter(oneOriginResult.travelTimes, task);
-            if (task.getFormat() == GEOTIFF) {
-                timeGridWriter.writeGeotiff(byteArrayOutputStream);
-            } else {
-                // Catch-all, if the client didn't specifically ask for a GeoTIFF give it a proprietary grid.
-                // Return raw byte array representing grid to caller, for return to client over HTTP.
-                // TODO eventually reuse same code path as static site time grid saving
-                // TODO move the JSON writing code into the grid writer, it's essentially part of the grid format
-                timeGridWriter.writeToDataOutput(new LittleEndianDataOutputStream(byteArrayOutputStream));
-                AnalysisWorker.addJsonToGrid(
-                        byteArrayOutputStream,
-                        oneOriginResult,
-                        transportNetwork.scenarioApplicationWarnings,
-                        transportNetwork.scenarioApplicationInfo,
-                        transportNetwork.transitLayer
-                );
+            Set<Integer> occurRoutes = new TreeSet<>();
+            
+            List<Map<String,Object>> results = new ArrayList<>(); 
+            
+            for (var path : oneOriginResult.paths.iterationsForPathTemplates)
+            {
+            	Set<RouteSequence> rs = path.asMap().keySet();
+            	
+            	double min = Double.MAX_VALUE;
+            	Map<Integer, RouteStats> routeCnt = new TreeMap<>();
+            	
+            	System.out.println(path);
+            	for (var iter : path.entries()) {
+            		System.out.println(iter);
+            		if (iter.getKey().routes.size()>0) {
+            			for (var it = iter.getKey().routes.iterator(); it.hasNext();)
+            			{
+            				int r = it.next();
+            				RouteStats rc = routeCnt.get(r);
+            				if (rc == null)
+            				{
+            					rc = new RouteStats();
+            					routeCnt.put(r, rc);
+            					
+            					RouteInfo ri = 
+            					transportNetwork.transitLayer.routes.get(r);
+
+            					rc.routeId = r;
+            					occurRoutes.add(r);
+            				}
+            				rc.count++;
+            				rc.minDuration = Math.min(rc.minDuration, iter.getValue().totalTime);
+            			}
+            		}
+            		min = Math.min(min, iter.getValue().totalTime);            		
+            	}
+            	
+            	Map<String, Object> r = new TreeMap<>();
+
+            	r.put("minTotalTime", min);
+            	r.put("routes", routeCnt.values());
+            	
+            	
+            	for (var rc : routeCnt.values())
+            	{
+            		if (min == rc.minDuration)
+            		{
+            			r.put("bestRoute", rc);
+            		}
+            	}
+            	
+            	results.add(r);
             }
             
-            response.status(HttpStatus.OK_200);
-            if (task.getFormat().equals(GEOTIFF)) {
-                response.header("Content-Type", "application/x-geotiff");
-            } else {
-                response.header("Content-Type", "application/octet-stream");
+            
+            Map<String,Object> routeInfos = new LinkedHashMap<String, Object>();
+            
+            for (var r: occurRoutes) {
+				RouteInfo ri = 
+				transportNetwork.transitLayer.routes.get(r);
+				
+				RouteInfos rc = new RouteInfos();
+				rc.routeId = r;
+				rc.routeName = ri.route_short_name;
+				rc.routeLongName = ri.route_long_name;   
+				rc.routeType = ri.route_type;
+				routeInfos.put(r+"", rc);
             }
-            return byteArrayOutputStream.toByteArray();
+            
+            Map<String,Object> resultCont = new LinkedHashMap<String, Object>();
+            resultCont.put("results", results);
+            resultCont.put("routeInfos", routeInfos);
+            
+            
+            response.header("Content-Type", "application/json");
+            
+            var json = new ObjectMapper().writeValueAsString(resultCont);
+            return json;
+            
+//            if (oneOriginResult.travelTimes != null)
+//            {
+//            // The single-origin travel time surface can be represented as a proprietary grid or as a GeoTIFF.
+//            TimeGridWriter timeGridWriter = new TimeGridWriter(oneOriginResult.travelTimes, task);
+//            if (false /*task.getFormat() == GEOTIFF*/) {
+//                timeGridWriter.writeGeotiff(byteArrayOutputStream);
+//            } else {
+//                // Catch-all, if the client didn't specifically ask for a GeoTIFF give it a proprietary grid.
+//                // Return raw byte array representing grid to caller, for return to client over HTTP.
+//                // TODO eventually reuse same code path as static site time grid saving
+//                // TODO move the JSON writing code into the grid writer, it's essentially part of the grid format
+//                timeGridWriter.writeToDataOutput(new LittleEndianDataOutputStream(byteArrayOutputStream));
+//                AnalysisWorker.addJsonToGrid(
+//                        byteArrayOutputStream,
+//                        oneOriginResult,
+//                        transportNetwork.scenarioApplicationWarnings,
+//                        transportNetwork.scenarioApplicationInfo,
+//                        transportNetwork.transitLayer
+//                );
+//            }
+//            
+//            response.status(HttpStatus.OK_200);
+//            if (false /*task.getFormat() == GEOTIFF*/) {
+//                response.header("Content-Type", "application/x-geotiff");
+//            } else {
+//                response.header("Content-Type", "application/octet-stream");
+//            }
+//            return byteArrayOutputStream.toByteArray();
+//            }
+//            else
+//            {
+//            	throw new RuntimeException("no result");
+//            }
         } catch (Throwable throwable) {
         	throw new RuntimeException(throwable);
         }
     }
+
+	private static ArrayList<Coordinate> paramToCoordinates(String dest_coords) {
+		String [] pairs = dest_coords.split(";");
+    	
+    	var coordinates = new ArrayList<Coordinate>();
+    	for (String pair : pairs) {
+    		String[] oords = pair.split(",");
+    		var c = new Coordinate(Double.valueOf(oords[0]), Double.valueOf(oords[1]));
+    		coordinates.add(c);
+    	}
+		return coordinates;
+	}
     
     /**
      * Add a feature to the supplied List of GeoJSON features. Used in street layer debug visualizations.
