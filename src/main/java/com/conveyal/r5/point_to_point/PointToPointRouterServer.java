@@ -39,6 +39,7 @@ import com.conveyal.r5.transit.RouteInfo;
 import com.conveyal.r5.transit.TransitLayer.EntityRepresentation;
 import com.conveyal.r5.transit.TransportNetwork;
 import com.conveyal.r5.transit.path.RouteSequence;
+import com.conveyal.r5.transit.path.RouteSequence.TransitLeg;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.google.common.io.LittleEndianDataOutputStream;
@@ -975,10 +976,23 @@ public class PointToPointRouterServer {
 		public int routeType;
     }
     
+    public static class StopInfos {
+    	public int stopId;
+		public String name;
+    }
+    
     public static class RouteStats {
     	public int routeId;
     	public int count=0;
     	public double minDuration=Double.MAX_VALUE;
+		public String accessMode;
+		public int accessTime;
+		public String egressMode;
+		public int egressTime;
+		public int departureTime;
+		public int[] boardStops;
+		public int[] alightStops;
+		public int[] rideTimesSeconds;
     }
     
     public static Object handleSinglePoint (Request request, Response response, TransportNetwork transportNetwork) throws IOException {
@@ -1050,6 +1064,7 @@ public class PointToPointRouterServer {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 
             Set<Integer> occurRoutes = new TreeSet<>();
+            Set<Integer> occurStops = new TreeSet<>();
             
             List<Map<String,Object>> results = new ArrayList<>(); 
             
@@ -1077,6 +1092,26 @@ public class PointToPointRouterServer {
             					transportNetwork.transitLayer.routes.get(r);
 
             					rc.routeId = r;
+            					rc.accessMode = ""+iter.getKey().stopSequence.access.mode;
+            					rc.accessTime = iter.getKey().stopSequence.access.time;
+            					rc.boardStops = iter.getKey().stopSequence.boardStops.toArray();
+            					rc.alightStops = iter.getKey().stopSequence.alightStops.toArray();
+            					rc.rideTimesSeconds = iter.getKey().stopSequence.rideTimesSeconds.toArray();
+            					
+            					rc.egressMode = ""+iter.getKey().stopSequence.egress.mode;
+            					rc.egressTime = iter.getKey().stopSequence.egress.time;
+            					
+            					rc.departureTime = iter.getValue().departureTime;
+            					
+            					for (var stop : rc.alightStops)
+            					{
+            						occurStops.add(stop);
+            					}
+            					for (var stop : rc.boardStops)
+            					{
+            						occurStops.add(stop);
+            					}
+            					
             					occurRoutes.add(r);
             				}
             				rc.count++;
@@ -1118,49 +1153,26 @@ public class PointToPointRouterServer {
 				routeInfos.put(r+"", rc);
             }
             
+            Map<String,Object> stopInfos = new LinkedHashMap<String, Object>();
+            
+            for (var s: occurStops) {
+				StopInfos rc = new StopInfos();
+				rc.stopId = s;
+				rc.name = transportNetwork.transitLayer.stopNames.get(s);
+
+				stopInfos.put(s+"", rc);
+            }
+            
             Map<String,Object> resultCont = new LinkedHashMap<String, Object>();
             resultCont.put("results", results);
             resultCont.put("routeInfos", routeInfos);
-            
+            resultCont.put("stopInfos", stopInfos);
             
             response.header("Content-Type", "application/json");
             
             var json = new ObjectMapper().writeValueAsString(resultCont);
             return json;
             
-//            if (oneOriginResult.travelTimes != null)
-//            {
-//            // The single-origin travel time surface can be represented as a proprietary grid or as a GeoTIFF.
-//            TimeGridWriter timeGridWriter = new TimeGridWriter(oneOriginResult.travelTimes, task);
-//            if (false /*task.getFormat() == GEOTIFF*/) {
-//                timeGridWriter.writeGeotiff(byteArrayOutputStream);
-//            } else {
-//                // Catch-all, if the client didn't specifically ask for a GeoTIFF give it a proprietary grid.
-//                // Return raw byte array representing grid to caller, for return to client over HTTP.
-//                // TODO eventually reuse same code path as static site time grid saving
-//                // TODO move the JSON writing code into the grid writer, it's essentially part of the grid format
-//                timeGridWriter.writeToDataOutput(new LittleEndianDataOutputStream(byteArrayOutputStream));
-//                AnalysisWorker.addJsonToGrid(
-//                        byteArrayOutputStream,
-//                        oneOriginResult,
-//                        transportNetwork.scenarioApplicationWarnings,
-//                        transportNetwork.scenarioApplicationInfo,
-//                        transportNetwork.transitLayer
-//                );
-//            }
-//            
-//            response.status(HttpStatus.OK_200);
-//            if (false /*task.getFormat() == GEOTIFF*/) {
-//                response.header("Content-Type", "application/x-geotiff");
-//            } else {
-//                response.header("Content-Type", "application/octet-stream");
-//            }
-//            return byteArrayOutputStream.toByteArray();
-//            }
-//            else
-//            {
-//            	throw new RuntimeException("no result");
-//            }
         } catch (Throwable throwable) {
         	throw new RuntimeException(throwable);
         }
