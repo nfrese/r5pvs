@@ -24,6 +24,7 @@ public class PlannerRequest {
 	public static class TripLeg {
 		public String routeId;
 		public String routeLongName;
+		public String routeShortName;
 		public int routeType;
 		public int boardStopId;
 		public int alightStopId;
@@ -33,26 +34,27 @@ public class PlannerRequest {
 		public String boardStopName;
 		public String alightStopName;
 		public String geom;
-		public String routeShortName;
 	}
 
 	public static class TripInfos {
+		public String mode;
 		public String routeId;
-		public int count=0;
+		public String routeLongName;
+		public String routeShortName;
 		public double totalDurationSeconds=Double.MAX_VALUE;
 		public String accessMode;
 		public int accessTime;
 		public String egressMode;
 		public int egressTime;
 		public int departureTime;
-		public int[] boardStops;
-		public int[] alightStops;
-		public int[] rideTimesSeconds;
-		public String route;
+		public double rideTimesSeconds;
 
 		public List<TripLeg> tripLegs = new ArrayList<>();
-		public String routeLongName;
-		public String routeShortName;
+	}
+	
+	public static class TripResult {
+		public TripInfos bestTrip;
+		public List<TripInfos> trips;
 	}
 
 	public static Object handlePlan (Request request, Response response, TransportNetwork transportNetwork) throws IOException {
@@ -78,7 +80,8 @@ public class PlannerRequest {
 		task.fromTime = 7 * 60 * 60;
 		task.maxTripDurationMinutes = 120;
 		task.maxFare = 99999;
-		task.toTime = 9 * 60 * 60;
+		task.toTime = 7 * 60 * 60 + 30 * 60;
+		task.monteCarloDraws = 5;
 		task.transitModes = EnumSet.of(TransitModes.BUS);
 		task.accessModes = EnumSet.of(LegMode.WALK);
 		task.directModes = EnumSet.of(LegMode.WALK);
@@ -102,7 +105,7 @@ public class PlannerRequest {
 			
 			for (var leg : trip.getLegs()) {
 				TripLeg tLeg = new TripLeg();
-				tLeg.routeId = leg.getRoute();
+				tLeg.routeId = leg.getRoute() != null && !leg.getRoute().isBlank() ? leg.getRoute() : null;
 				tLeg.routeShortName = leg.getRouteShortName();
 				tLeg.routeLongName = leg.getRouteLongName();
 				tLeg.boardStopId = leg.getBoardStop();
@@ -117,7 +120,7 @@ public class PlannerRequest {
 				ti.tripLegs.add(tLeg);
 				
 				if (nlegs>2) {
-					if (cnt == 1)
+					if (cnt == 0)
 					{
 						ti.accessMode = tLeg.mode;
 						ti.accessTime = tLeg.legDurationSeconds;
@@ -128,10 +131,12 @@ public class PlannerRequest {
 						ti.egressTime = tLeg.legDurationSeconds;
 					}
 					
-					if (cnt == 2 && tLeg.routeId != null) {
+					if (cnt == 1 && tLeg.routeId != null) {
 						ti.routeId = tLeg.routeId;
 						ti.routeLongName = tLeg.routeLongName;
 						ti.routeShortName = tLeg.routeShortName;
+						ti.rideTimesSeconds = tLeg.legDurationSeconds;
+						ti.mode = tLeg.mode;
 					}
 				}
 				
@@ -142,7 +147,7 @@ public class PlannerRequest {
 			ti.totalDurationSeconds = trip.getTotalDurationSeconds();
 			tis.add(ti);
 
-			if (ti.totalDurationSeconds < bestDurationSeconds)
+			if (ti.totalDurationSeconds < bestDurationSeconds && ti.routeId != null)
 			{
 				bestTrip = ti;
 				bestDurationSeconds = ti.totalDurationSeconds;
@@ -152,13 +157,13 @@ public class PlannerRequest {
 
 		response.header("Content-Encoding", "gzip");
 
-		Map<String,Object> resultCont = new LinkedHashMap<String, Object>();
-		resultCont.put("bestTrip", bestTrip);
-		resultCont.put("trips", tis);
-
+		TripResult res = new TripResult();
+		res.bestTrip = bestTrip;
+		res.trips = tis;
+		
 		response.header("Content-Type", "application/json");
 
-		var json = new ObjectMapper().writeValueAsString(resultCont);
+		var json = new ObjectMapper().writeValueAsString(res);
 		return json;
 
 	}
