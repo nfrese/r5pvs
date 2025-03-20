@@ -57,6 +57,8 @@ public class TripLeg {
     private String route;
 
     private LineString geometry;
+	private String route_longname;
+	private String route_short_name;
 
     public String getMode() {
         return mode;
@@ -122,7 +124,10 @@ public class TripLeg {
     }
 
     public static TripLeg newTransitLeg(String mode, int duration, int fare, int waitTime,
-                                        int boardStop, int alightStop, String route) {
+                                        int boardStop, int alightStop, 
+                                        String route, 
+                                        String route_short_name,
+                                        String route_longname) {
         TripLeg newLeg = new TripLeg();
 
         newLeg.mode = mode;
@@ -133,6 +138,8 @@ public class TripLeg {
         newLeg.boardStop = boardStop;
         newLeg.alightStop = alightStop;
         newLeg.route = route;
+        newLeg.route_short_name = route_short_name;
+        newLeg.route_longname = route_longname;
 
 //        newLeg.legDistance = (int) geometry.getLength();
 //        newLeg.geometry = geometry;
@@ -214,5 +221,13 @@ public class TripLeg {
         this.legDistance = getLinestringLength(geometry);
         return this.legDistance;
     }
+
+	public String getRouteLongName() {
+		return this.route_longname;
+	}
+	
+	public String getRouteShortName() {
+		return this.route_short_name;
+	}
 }
 

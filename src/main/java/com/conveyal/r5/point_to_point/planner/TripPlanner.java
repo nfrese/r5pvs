@@ -108,7 +108,7 @@ public class TripPlanner {
         List<Trip> tripList = new ArrayList<>(trips.values());
 
         tripList = tripList.stream()
-                .filter(trip -> trip.getTotalDurationSeconds() <= request.maxTripDurationMinutes * 60 && trip.getTotalFare() <= request.maxFare)
+                .filter(trip -> checkTrip(trip))
                 .sorted(Comparator.comparingInt(Trip::directFirst).thenComparingInt(Trip::getNumberOfLegs).thenComparingInt(Trip::getTotalDurationSeconds))
                 .collect(Collectors.toList());
 
@@ -122,6 +122,10 @@ public class TripPlanner {
 
         return tripList;
     }
+
+	private boolean checkTrip(Trip trip) {
+		return trip.getTotalDurationSeconds() <= request.maxTripDurationMinutes * 60 && trip.getTotalFare() <= request.maxFare;
+	}
 
 
     /**

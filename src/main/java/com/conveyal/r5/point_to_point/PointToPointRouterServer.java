@@ -947,8 +947,11 @@ public class PointToPointRouterServer {
         
         get("/single", (request, response) -> {
         	return SingleStartRequest.handleSinglePoint(request, response, transportNetwork);
-        }
-        );
+        });
+        
+        get("/plan2", (request, response) -> {
+        	return PlannerRequest.handlePlan(request, response, transportNetwork);
+        });
     }
 
     static ArrayList<Coordinate> paramToCoordinates(String dest_coords) {

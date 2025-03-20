@@ -245,7 +245,10 @@ public class Trip {
 
                     int fare = state.fare != null ? state.fare.cumulativeFarePaid : 0;
                     TripLeg leg = TripLeg.newTransitLeg(mode, duration,
-                            fare, wait, boardStopIndex, alightStopIndex, route.route_id);
+                            fare, wait, boardStopIndex, alightStopIndex
+                            , route.route_id
+                            , route.route_short_name
+                            , route.route_long_name);
 
                     leg.setPatternData(pattern, state.boardStopPosition, state.alightStopPosition);
 
