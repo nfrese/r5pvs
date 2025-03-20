@@ -7,6 +7,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import com.conveyal.r5.api.util.LegMode;
 import com.conveyal.r5.api.util.TransitModes;
@@ -53,8 +54,8 @@ public class PlannerRequest {
 	}
 	
 	public static class TripResult {
-		public TripInfos bestTrip;
 		public List<TripInfos> trips;
+		public Map<String, TripInfos> bestTrips;
 	}
 
 	public static Object handlePlan (Request request, Response response, TransportNetwork transportNetwork) throws IOException {
@@ -94,7 +95,7 @@ public class PlannerRequest {
 		List<Trip> trips = planner.plan();
 		List<TripInfos> tis = new ArrayList<>();
 
-		TripInfos bestTrip = null;
+		Map<String,TripInfos> bestTrips = new TreeMap<>();
 		double bestDurationSeconds = Double.MAX_VALUE;
 
 		for (var trip: trips) {
@@ -151,18 +152,23 @@ public class PlannerRequest {
 			ti.totalDurationSeconds = trip.getTotalDurationSeconds();
 			tis.add(ti);
 
-			if (ti.totalDurationSeconds < bestDurationSeconds && ti.routeId != null)
+			TripInfos bt = bestTrips.get(ti.mode);
+			if (bt == null)
 			{
-				bestTrip = ti;
-				bestDurationSeconds = ti.totalDurationSeconds;
+				bestTrips.put(ti.mode, ti);
 			}
+			else if (ti.totalDurationSeconds < bt.totalDurationSeconds)
+			{
+				bestTrips.put(ti.mode, ti);
+			}
+
 
 		}
 
 		response.header("Content-Encoding", "gzip");
 
 		TripResult res = new TripResult();
-		res.bestTrip = bestTrip;
+		res.bestTrips = bestTrips;
 		res.trips = tis;
 		
 		response.header("Content-Type", "application/json");
