@@ -160,7 +160,10 @@ public class SingleStartRequest {
 							rc.minDuration = Math.min(rc.minDuration, iter.getValue().totalTime);
 						}
 					}
-					min = Math.min(min, iter.getValue().totalTime);            		
+					
+					if (iter.getKey().routes.size()>0) {
+						min = Math.min(min, iter.getValue().totalTime);
+					}
 				}
 
 				Map<String, Object> r = new TreeMap<>();
