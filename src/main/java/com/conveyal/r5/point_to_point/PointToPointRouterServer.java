@@ -949,23 +949,15 @@ public class PointToPointRouterServer {
         	return SingleStartRequest.handleSinglePoint(request, response, transportNetwork);
         });
         
+        post("/single", (request, response) -> {
+        	return SingleStartRequest.handleSinglePointPost(request, response, transportNetwork);
+        });
+        
         get("/plan2", (request, response) -> {
         	return PlannerRequest.handlePlan(request, response, transportNetwork);
         });
     }
 
-    static ArrayList<Coordinate> paramToCoordinates(String dest_coords) {
-		String [] pairs = dest_coords.split(";");
-    	
-    	var coordinates = new ArrayList<Coordinate>();
-    	for (String pair : pairs) {
-    		String[] oords = pair.split(",");
-    		var c = new Coordinate(Double.valueOf(oords[0]), Double.valueOf(oords[1]));
-    		coordinates.add(c);
-    	}
-		return coordinates;
-	}
-    
     /**
      * Add a feature to the supplied List of GeoJSON features. Used in street layer debug visualizations.
      */

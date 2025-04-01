@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,12 +25,16 @@ import com.conveyal.r5.api.util.LegMode;
 import com.conveyal.r5.api.util.TransitModes;
 import com.conveyal.r5.transit.RouteInfo;
 import com.conveyal.r5.transit.TransportNetwork;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import spark.Request;
 import spark.Response;
 
 public class SingleStartRequest {
+
+	private static final ObjectMapper OM = new ObjectMapper();
+
 
 	public static class RouteInfos {
 		public int routeId;
@@ -57,17 +62,44 @@ public class SingleStartRequest {
 		public int[] rideTimesSeconds;
 	}
 
-	public static Object handleSinglePoint (Request request, Response response, TransportNetwork transportNetwork) throws IOException {
+	public static Object handleSinglePointPost (Request request, Response response, TransportNetwork transportNetwork) throws IOException {
+		JsonNode jn = OM.readTree( request.body());
+		
+		List<Coordinate> sourceCoordinates = jsonToCoordinates(jn.at("/sources"));
+		List<Coordinate> destCoordinates = jsonToCoordinates(jn.at("/destinations"));
+		return int_(request, response, transportNetwork, sourceCoordinates, destCoordinates);
 
+	}
+
+
+	private static List<Coordinate> jsonToCoordinates(JsonNode coordArrJn) {
+		var coordinates = new ArrayList<Coordinate>();
+		for (JsonNode n : coordArrJn) {
+			Iterator<JsonNode> it = n.iterator();
+			var c = new Coordinate(it.next().asDouble(), it.next().asDouble());
+			coordinates.add(c);
+		}
+		return coordinates;
+	}
+
+	
+	public static Object handleSinglePoint (Request request, Response response, TransportNetwork transportNetwork) throws IOException {
+		
 		String sources = request.queryParams("sources");
 		String destinations = request.queryParams("destinations");
 
-		var sourceCoordinates = PointToPointRouterServer.paramToCoordinates(sources);
-		var destCoordinates = PointToPointRouterServer.paramToCoordinates(destinations);
+		var sourceCoordinates = SingleStartRequest.paramToCoordinates(sources);
+		var destCoordinates = SingleStartRequest.paramToCoordinates(destinations);
 
+		return int_(request, response, transportNetwork, sourceCoordinates, destCoordinates);
+	}
+
+
+	private static Object int_(Request request, Response response, TransportNetwork transportNetwork, 
+			List<Coordinate> sourceCoordinates, List<Coordinate> destCoordinates) {
 		if (sourceCoordinates.size() != 1)
 		{
-			throw new RuntimeException("1 pair of source coordinates expected, got "+ sources);
+			throw new RuntimeException("1 pair of source coordinates expected, got "+ sourceCoordinates);
 		}
 
 		RegionalTask task = new RegionalTask() {
@@ -120,9 +152,7 @@ public class SingleStartRequest {
 				double min = Double.MAX_VALUE;
 				Map<Integer, SingleStartRequest.RouteStats> routeCnt = new TreeMap<>();
 
-				System.out.println(path);
 				for (var iter : path.entries()) {
-					System.out.println(iter);
 					if (iter.getKey().routes.size()>0) {
 						for (var it = iter.getKey().routes.iterator(); it.hasNext();)
 						{
@@ -215,12 +245,26 @@ public class SingleStartRequest {
 
 			response.header("Content-Type", "application/json");
 
-			var json = new ObjectMapper().writeValueAsString(resultCont);
+			var json = OM.writeValueAsString(resultCont);
 			return json;
 
 		} catch (Throwable throwable) {
 			throw new RuntimeException(throwable);
 		}
 	}
+
+
+	public static List<Coordinate> paramToCoordinates(String dest_coords) {
+		String [] pairs = dest_coords.split(";");
+		
+		var coordinates = new ArrayList<Coordinate>();
+		for (String pair : pairs) {
+			String[] oords = pair.split(",");
+			var c = new Coordinate(Double.valueOf(oords[0]), Double.valueOf(oords[1]));
+			coordinates.add(c);
+		}
+		return coordinates;
+	}
+
 
 }

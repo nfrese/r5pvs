@@ -63,8 +63,8 @@ public class PlannerRequest {
 		String sources = request.queryParams("sources");
 		String destinations = request.queryParams("destinations");
 
-		var sourceCoordinates = PointToPointRouterServer.paramToCoordinates(sources);
-		var destCoordinates = PointToPointRouterServer.paramToCoordinates(destinations);
+		var sourceCoordinates = SingleStartRequest.paramToCoordinates(sources);
+		var destCoordinates = SingleStartRequest.paramToCoordinates(destinations);
 
 		if (sourceCoordinates.size() != 1)
 		{
