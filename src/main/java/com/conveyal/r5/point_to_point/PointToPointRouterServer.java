@@ -949,7 +949,7 @@ public class PointToPointRouterServer {
         	return SingleStartRequest.handleSinglePoint(request, response, transportNetwork);
         });
         
-        post("/single", (request, response) -> {
+        post("/single2", (request, response) -> {
         	return SingleStartRequest.handleSinglePointPost(request, response, transportNetwork);
         });
         
