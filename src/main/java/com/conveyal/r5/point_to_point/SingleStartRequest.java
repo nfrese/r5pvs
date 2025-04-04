@@ -149,6 +149,11 @@ public class SingleStartRequest {
 
 			for (var path : oneOriginResult.paths.iterationsForPathTemplates)
 			{
+				if (path == null) {
+					System.err.println("path is null!");
+					continue;
+				}
+				
 				double min = Double.MAX_VALUE;
 				Map<Integer, SingleStartRequest.RouteStats> routeCnt = new TreeMap<>();
 
