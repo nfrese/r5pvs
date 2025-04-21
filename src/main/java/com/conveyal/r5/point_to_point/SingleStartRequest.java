@@ -119,7 +119,7 @@ public class SingleStartRequest {
 		task.date = LocalDate.of(2025,2,5);
 		task.fromTime = 7 * 60 * 60;
 		task.maxTripDurationMinutes = 30;
-		task.monteCarloDraws = 10;
+		task.monteCarloDraws = 5;
 		task.toTime = 9 * 60 * 60;
 		task.transitModes = EnumSet.of(TransitModes.BUS, 
 				TransitModes.RAIL, 
