@@ -953,6 +953,10 @@ public class PointToPointRouterServer {
         	return SingleStartRequest.handleSinglePointPost(request, response, transportNetwork);
         });
         
+        post("/singleIV", (request, response) -> {
+        	return SingleStartRequestIV.handleSinglePointPost(request, response, transportNetwork);
+        });
+        
         get("/plan2", (request, response) -> {
         	return PlannerRequest.handlePlan(request, response, transportNetwork);
         });

@@ -31,7 +31,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import spark.Request;
 import spark.Response;
 
-public class SingleStartRequest {
+
+@Deprecated // EXPERIMENTAL-NOT WORKING
+public class SingleStartRequestIV {
 
 	private static final ObjectMapper OM = new ObjectMapper();
 
@@ -88,8 +90,8 @@ public class SingleStartRequest {
 		String sources = request.queryParams("sources");
 		String destinations = request.queryParams("destinations");
 
-		var sourceCoordinates = SingleStartRequest.paramToCoordinates(sources);
-		var destCoordinates = SingleStartRequest.paramToCoordinates(destinations);
+		var sourceCoordinates = SingleStartRequestIV.paramToCoordinates(sources);
+		var destCoordinates = SingleStartRequestIV.paramToCoordinates(destinations);
 
 		return int_(request, response, transportNetwork, sourceCoordinates, destCoordinates);
 	}
@@ -122,17 +124,11 @@ public class SingleStartRequest {
 		task.monteCarloDraws = 5;
 		task.toTime = 9 * 60 * 60;
 		task.maxFare = 99999;
-		task.transitModes = EnumSet.of(TransitModes.BUS, 
-				TransitModes.RAIL, 
-				TransitModes.SUBWAY, 
-				TransitModes.TRAM,
-				TransitModes.FERRY,
-				TransitModes.FUNICULAR,
-				TransitModes.GONDOLA);
-		task.accessModes = EnumSet.of(LegMode.WALK);
-		task.directModes = EnumSet.of(LegMode.WALK);
+		task.transitModes = EnumSet.of(TransitModes.BUS);
+		task.accessModes = EnumSet.of(LegMode.WALK, LegMode.BICYCLE, LegMode.CAR);
+		task.directModes = EnumSet.of(LegMode.WALK, LegMode.BICYCLE, LegMode.CAR);
 		task.oneToOne=false;
-		task.egressModes = EnumSet.of(LegMode.WALK);
+		task.egressModes = EnumSet.of(LegMode.WALK, LegMode.BICYCLE, LegMode.CAR);
 		task.includePathResults = true;
 		task.percentiles = new int[] {1,25,50,75,99};
 		task.cutoffsMinutes = new int[] {5,10,15,20,25};
@@ -162,17 +158,17 @@ public class SingleStartRequest {
 				}
 				
 				double min = Double.MAX_VALUE;
-				Map<Integer, SingleStartRequest.RouteStats> routeCnt = new TreeMap<>();
+				Map<Integer, SingleStartRequestIV.RouteStats> routeCnt = new TreeMap<>();
 
 				for (var iter : path.entries()) {
 					if (iter.getKey().routes.size()>0) {
 						for (var it = iter.getKey().routes.iterator(); it.hasNext();)
 						{
 							int r = it.next();
-							SingleStartRequest.RouteStats rc = routeCnt.get(r);
+							SingleStartRequestIV.RouteStats rc = routeCnt.get(r);
 							if (rc == null)
 							{
-								rc = new SingleStartRequest.RouteStats();
+								rc = new SingleStartRequestIV.RouteStats();
 								routeCnt.put(r, rc);
 
 								rc.routeId = r;
@@ -232,7 +228,7 @@ public class SingleStartRequest {
 				RouteInfo ri = 
 						transportNetwork.transitLayer.routes.get(r);
 
-				SingleStartRequest.RouteInfos rc = new SingleStartRequest.RouteInfos();
+				SingleStartRequestIV.RouteInfos rc = new SingleStartRequestIV.RouteInfos();
 				rc.routeId = r;
 				rc.routeName = ri.route_short_name;
 				rc.routeLongName = ri.route_long_name;   
@@ -243,7 +239,7 @@ public class SingleStartRequest {
 			Map<String,Object> stopInfos = new LinkedHashMap<String, Object>();
 
 			for (var s: occurStops) {
-				SingleStartRequest.StopInfos rc = new SingleStartRequest.StopInfos();
+				SingleStartRequestIV.StopInfos rc = new SingleStartRequestIV.StopInfos();
 				rc.stopId = s;
 				rc.name = transportNetwork.transitLayer.stopNames.get(s);
 
