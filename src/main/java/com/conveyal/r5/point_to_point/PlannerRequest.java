@@ -83,9 +83,16 @@ public class PlannerRequest {
 		task.maxFare = 99999;
 		task.toTime = 7 * 60 * 60 + 30 * 60;
 		task.monteCarloDraws = 5;
-		task.transitModes = EnumSet.of(TransitModes.BUS, TransitModes.RAIL, TransitModes.TRAM, TransitModes.SUBWAY);
+		task.transitModes = EnumSet.of(TransitModes.BUS, 
+				TransitModes.RAIL, 
+				TransitModes.SUBWAY, 
+				TransitModes.TRAM,
+				TransitModes.FERRY,
+				TransitModes.FUNICULAR,
+				TransitModes.GONDOLA,
+				TransitModes.TRANSIT);
 		task.accessModes = EnumSet.of(LegMode.WALK);
-		task.directModes = EnumSet.of(LegMode.WALK, LegMode.BICYCLE, LegMode.CAR);
+		task.directModes = EnumSet.of(LegMode.WALK);
 		task.egressModes = EnumSet.of(LegMode.WALK);
 
 		TripPlanner planner = new TripPlanner(transportNetwork, task);

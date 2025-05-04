@@ -128,7 +128,8 @@ public class SingleStartRequest {
 				TransitModes.TRAM,
 				TransitModes.FERRY,
 				TransitModes.FUNICULAR,
-				TransitModes.GONDOLA);
+				TransitModes.GONDOLA,
+				TransitModes.TRANSIT);
 		task.accessModes = EnumSet.of(LegMode.WALK);
 		task.directModes = EnumSet.of(LegMode.WALK);
 		task.oneToOne=false;
